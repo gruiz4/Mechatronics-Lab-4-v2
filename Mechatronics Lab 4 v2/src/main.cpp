@@ -1,19 +1,41 @@
-#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
 
-// put function declarations here:
-int myFunction(int, int);
+uint16_t BNO055_SAMPLERATE_DELAY_MS = 00;
+Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
 
-void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
-  //change
+void setup(void) {
+  Serial.begin(115200);
+  while (!Serial) delay(10); 
+
+  Serial.println("Orientation Sensor Test\n");
+
+  if (!bno.begin()) {
+    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+    while (1);
+  }
+  delay(1000);
 }
+void loop(void)
+{
+  sensors_event_t orientationData;
+  bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
 
-void loop() {
-  // put your main code here, to run repeatedly:
-}
+  // Accessing members directly: 
+  // x = Yaw (Heading), y = Roll, z = Pitch
+  float roll   = orientationData.orientation.heading;
+  float yaw  = orientationData.orientation.roll;
+  float pitch = orientationData.orientation.pitch;
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  Serial.print("Roll: ");
+  Serial.print(roll);
+  Serial.print(" | Pitch: ");
+  Serial.print(pitch);
+  Serial.print(" | Yaw: ");
+  Serial.println(yaw);
+
+  delay(BNO055_SAMPLERATE_DELAY_MS);
+  
 }
