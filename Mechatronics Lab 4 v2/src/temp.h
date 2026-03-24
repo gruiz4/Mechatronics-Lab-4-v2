@@ -5,7 +5,6 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
-
 #include <DualMAX14870MotorShield.h>
 #include <Pixy2.h>
 #include <SharpIR.h>
@@ -55,7 +54,7 @@ extern const float WALL_THRESHOLD;
 extern const float WALL_DIST_TOO_BIG; 
 
 // ---------------------------------------------------------
-// Sensor & State Tracking Variables (Used in drivers.cpp)
+// Sensor & State Tracking Variables
 // ---------------------------------------------------------
 extern float D_L;
 extern float D_R;
@@ -68,21 +67,6 @@ extern float D_history[3];
 extern unsigned long lastStuckCheck;
 extern int stuckCounter;
 
-
-// ---------------------------------------------------------
-// XBee Tracking Variables
-// ---------------------------------------------------------
-extern int matchByte;
-extern int gameTime;
-extern int Xcoord;
-extern int Ycoord;
-
-// ---------------------------------------------------------
-// Function Declarations
-// ---------------------------------------------------------
-// ... [existing declarations] ...
-void getXbee();
-
 // ---------------------------------------------------------
 // Function Declarations
 // ---------------------------------------------------------
@@ -93,12 +77,11 @@ void interruptB_L();
 
 void turn_deg(float deg);
 void drive_dist(float dist_cm);
-void updateSensors();
 
+void updateSensors();
 void setupIMU();
 void updateIMU();
 
 void getXbee();
-void updateBNO055(class BNO);
 
 #endif

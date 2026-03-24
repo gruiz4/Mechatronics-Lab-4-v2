@@ -23,8 +23,6 @@ void setup(void) {
   Serial.begin(115200);
   Serial1.begin(115200);
 
-  while (!Serial) delay(10); 
-
   Serial.println("Orientation Sensor Test\n");
 
   if (!bno.begin()) {
@@ -83,66 +81,4 @@ void loop(void)
   vel_z += accel_z * dt;
   delay(BNO055_SAMPLERATE_DELAY_MS);
   
-}
-
-void getXbee(void) {
-  // 1. Send the query
-  Serial1.write('?');
-
-  const int len = 32; // Increased to ensure enough space for "1,2345,678,987\n"
-  char message[len];
-  
-  // 2. Read the response safely
-  // readBytesUntil waits for the newline character or times out (default 1000ms).
-  // It handles the Arduino vs. Serial speed difference automatically.
-  int bytesRead = Serial1.readBytesUntil('\n', message, len - 1);
-  
-  if (bytesRead == 0) {
-    return; // Exit if no data was received
-  }
-  
-  message[bytesRead] = '\0'; // Null-terminate the array to make it a valid C-string
-
-  // 3. Parse the data
-  int currentIndex = 0;
-
-  // Reset variables before parsing new data
-  matchByte = 0;
-  gameTime = 0;
-  Xcoord = 0;
-  Ycoord = 0;
-
-  // Extract matchByte
-  while (currentIndex < bytesRead && message[currentIndex] != ',') {
-    matchByte = (matchByte * 10) + (message[currentIndex] - '0');
-    currentIndex++;
-  }
-  currentIndex++; // Skip the comma
-
-  // Extract gameTime
-  while (currentIndex < bytesRead && message[currentIndex] != ',') {
-    gameTime = (gameTime * 10) + (message[currentIndex] - '0');
-    currentIndex++;
-  }
-  currentIndex++; // Skip the comma
-
-  // Extract Xcoord
-  while (currentIndex < bytesRead && message[currentIndex] != ',') {
-    Xcoord = (Xcoord * 10) + (message[currentIndex] - '0');
-    currentIndex++;
-  }
-  currentIndex++; // Skip the comma
-
-  // Extract Ycoord
-  // We also check for '\r' (carriage return) in case the sender uses "\r\n"
-  while (currentIndex < bytesRead && message[currentIndex] != '\r' && message[currentIndex] != '\0') {
-    Ycoord = (Ycoord * 10) + (message[currentIndex] - '0');
-    currentIndex++;
-  }
-
-  // 4. Verification (Optional)
-  Serial.print("Parsed -> Match: "); Serial.print(matchByte);
-  Serial.print(" | Time: "); Serial.print(gameTime);
-  Serial.print(" | X: "); Serial.print(Xcoord);
-  Serial.print(" | Y: "); Serial.println(Ycoord);
 }
