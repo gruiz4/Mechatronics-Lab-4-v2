@@ -1,9 +1,17 @@
 #include "drivers.h"
+#include "nav.h" // Needed for State enum and currentState
 
+// ---------------------------------------------------------
+// OBJECT INSTANTIATIONS
+// ---------------------------------------------------------
+DualMAX14870MotorShield motors;
+Pixy2 pixy;
+SharpIR sharpL(SharpIR::GP2Y0A41SK0F, A2);  
+SharpIR sharpR(SharpIR::GP2Y0A41SK0F, A3);
 
-/* PIN DEFINITIONS*/
-
-// Encoders (Interrupt capable pins)
+// ---------------------------------------------------------
+// PIN DEFINITIONS
+// ---------------------------------------------------------
 const int encoderA_L = 2;
 const int encoderB_L = 3;
 const int encoderA_R = 19;
@@ -12,7 +20,6 @@ const int encoderB_R = 18;
 // Encoder Counts
 volatile long count_R = 0;
 volatile long count_L = 0;
-
 
 // ---------------------------------------------------------
 // PHYSICAL DIMENSIONS, KINEMATICS, & TUNING
@@ -23,23 +30,39 @@ const float PI_VAL = 3.1415;
 const float COUNTS_PER_WHEEL_REV = 1633.0; // Calibrated encoder counts per revolution
 
 float robot_turn_circumference = PI_VAL * TRACK_WIDTH;
-
 float wheel_circumference = 2.0 * PI_VAL * RADIUS;
-  
 
 const float S = 20.0;     // Grid square side length (cm)
 const float C = 2.0;      // Off-center threshold (cm)
 const int BASE_SPEED = 90;
 const int TURN_SPEED = 80;
 
-
 // Safety Constants
-const float MIN_TURN_CLEARANCE = 0; // Minimum cm needed on the side to safely pivot
+const float MIN_TURN_CLEARANCE = 0;   // Minimum cm needed on the side to safely pivot
 const float WALL_THRESHOLD = 12.0;    // Distance indicating a wall is present
 const float WALL_DIST_TOO_BIG = 30.0; // If the sum of the sensors reads a value larger than this, it won't center
-// const float FAR_WALL_THRESHOLD = 12.0;
+
+// ---------------------------------------------------------
+// SENSOR & STATE VARIABLES
+// ---------------------------------------------------------
+float D_L = 0.0;
+float D_R = 0.0;
+float D = 0.0;
+float prev_D = 0.0;
+float prev_D_L = 0.0;
+float prev_D_R = 0.0;
+float D_history[3] = {0.0, 0.0, 0.0};
+
+unsigned long lastStuckCheck = 0;
+int stuckCounter = 0;
+State currentState = SEARCHING;
 
 
+
+int matchByte = 0;
+int gameTime = 0;
+int Xcoord = 0;
+int Ycoord = 0;
 // ---------------------------------------------------------
 // Function Definitions
 // ---------------------------------------------------------
@@ -76,15 +99,6 @@ void updateSensors() {
   long dur = pulseIn(PING_PIN, HIGH, 25000);
   float new_D = (dur == 0) ? 999 : dur / 29.0 / 2.0;
 
-    // FIX: Handle ultrasonic blind spot when touching a wall
-  // float new_D;
-  // if (dur == 0) {
-  //   // If timeout, but previous read was < 10cm, we are touching the wall!
-  //   new_D = (D_history[0] < 10.0) ? 1.0 : 999.0; 
-  // } else {
-  //   new_D = dur / 29.0 / 2.0;
-  // }
-
   // Median filter for PING sensor to remove sporadic false reads
   D_history[2] = D_history[1];
   D_history[1] = D_history[0];
@@ -96,14 +110,6 @@ void updateSensors() {
   if (a > b) { float t = a; a = b; b = t; }
   D = b; // 'b' is now the median value
 
-  // Serial.print("Front Distance:");
-  // Serial.print(D);
-  // Serial.print(" | Right Distance:");
-  // Serial.print(D_R);
-  // Serial.print(" | Left Distance:");
-  // Serial.println(D_L);
-
-
   // STUCK DETECTION LOGIC: Check every 500ms
   if (millis() - lastStuckCheck > 500) {
     float d_change = abs(D - prev_D);
@@ -111,7 +117,7 @@ void updateSensors() {
     float r_change = abs(D_R - prev_D_R);
 
     // If robot is in a moving state but distances barely changed (less than 3cm)
-    if (currentState != SEARCHING && currentState != TURN_TAG && currentState != REVERSING) {
+    if (pos.currentState != SEARCHING && pos.currentState != TURN_TAG && pos.currentState != REVERSING) {
       if (d_change < 3.0 && l_change < 3.0 && r_change < 3.0) {
         stuckCounter++;
       } else {
@@ -120,16 +126,14 @@ void updateSensors() {
 
       // If stuck for 2 consecutive checks (1 second), trigger reverse
       if (stuckCounter >= 2) {
-        currentState = REVERSING;
+        pos.currentState = REVERSING;
         stuckCounter = 0;
       }
     }
-
     prev_D = D; prev_D_L = D_L; prev_D_R = D_R;
     lastStuckCheck = millis();
   }
 }
-
 
 void drive_dist(float dist_cm) {
   long start_L, start_R;
@@ -138,7 +142,6 @@ void drive_dist(float dist_cm) {
   start_R = count_R;
   interrupts();
 
-  float wheel_circumference = 2.0 * PI_VAL * RADIUS;
   long target_counts = (abs(dist_cm) / wheel_circumference) * COUNTS_PER_WHEEL_REV;
 
   if (dist_cm > 0) {
@@ -159,15 +162,112 @@ void drive_dist(float dist_cm) {
 
     long diff_L = abs(current_L - start_L);
     long diff_R = abs(current_R - start_R);
-    // long avg_diff = (diff_L + diff_R) / 2;
 
-    // if (avg_diff >= target_counts) {
-    //   break; 
-    // }
     if (diff_L >= target_counts || diff_R >= target_counts){
       break;
     }
   }
   
   motors.setSpeeds(0, 0);
+}
+
+
+void turn_deg(float deg) {
+  long start_L, start_R;
+  noInterrupts();
+  start_L = count_L;
+  start_R = count_R;
+  interrupts();
+
+  // Calculate distance based on robot kinematics
+  float wheel_distance_to_travel = (abs(deg) / 360.0) * robot_turn_circumference;
+  long target_counts = (wheel_distance_to_travel / wheel_circumference) * COUNTS_PER_WHEEL_REV;
+
+  if (deg > 0) {
+    // Right Turn: Left motor (M1) forward, Right motor (M2) backward
+    motors.setM1Speed(TURN_SPEED);   
+    motors.setM2Speed(-TURN_SPEED);  
+  } else {
+    // Left Turn: Left motor (M1) backward, Right motor (M2) forward
+    motors.setM1Speed(-TURN_SPEED);  
+    motors.setM2Speed(TURN_SPEED);   
+  }
+
+  while (true) {
+    long current_L, current_R;
+    
+    noInterrupts();
+    current_L = count_L;
+    current_R = count_R;
+    interrupts();
+
+    long diff_L = abs(current_L - start_L);
+    long diff_R = abs(current_R - start_R);
+
+    if (diff_L >= target_counts || diff_R >= target_counts){
+      break;
+    }
+  }
+  
+  motors.setSpeeds(0, 0);
+}
+
+
+void getXbee(void) {
+  // 1. Send the query
+  Serial1.write('?');
+
+  const int len = 32; 
+  char message[len];
+  
+  // 2. Read the response safely
+  int bytesRead = Serial1.readBytesUntil('\n', message, len - 1);
+  
+  if (bytesRead == 0) {
+    return; // Exit if no data was received
+  }
+  
+  message[bytesRead] = '\0'; 
+
+  // 3. Parse the data
+  int currentIndex = 0;
+
+  // Reset variables before parsing new data
+  matchByte = 0;
+  gameTime = 0;
+  Xcoord = 0;
+  Ycoord = 0;
+
+  // Extract matchByte
+  while (currentIndex < bytesRead && message[currentIndex] != ',') {
+    matchByte = (matchByte * 10) + (message[currentIndex] - '0');
+    currentIndex++;
+  }
+  currentIndex++; // Skip the comma
+
+  // Extract gameTime
+  while (currentIndex < bytesRead && message[currentIndex] != ',') {
+    gameTime = (gameTime * 10) + (message[currentIndex] - '0');
+    currentIndex++;
+  }
+  currentIndex++; 
+
+  // Extract Xcoord
+  while (currentIndex < bytesRead && message[currentIndex] != ',') {
+    Xcoord = (Xcoord * 10) + (message[currentIndex] - '0');
+    currentIndex++;
+  }
+  currentIndex++; 
+
+  // Extract Ycoord
+  while (currentIndex < bytesRead && message[currentIndex] != '\r' && message[currentIndex] != '\0') {
+    Ycoord = (Ycoord * 10) + (message[currentIndex] - '0');
+    currentIndex++;
+  }
+
+  // Optional print for verification
+  // Serial.print("Parsed -> Match: "); Serial.print(matchByte);
+  // Serial.print(" | Time: "); Serial.print(gameTime);
+  // Serial.print(" | X: "); Serial.print(Xcoord);
+  // Serial.print(" | Y: "); Serial.println(Ycoord);
 }

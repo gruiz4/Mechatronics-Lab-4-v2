@@ -1,21 +1,9 @@
-// Code used in the navigation and planning of maze robot
+#ifndef NAV_H
+#define NAV_H
+
 #include "drivers.h"
 
 #define map_size 500
-struct position{
-    
-int global_map[map_size][map_size]; /* Map is in cm. 1 when there is an obstacle measured 
-there, 0 when open  */
-int temp_map[map_size][map_size];
-int roll;
-int pitch;
-int yaw;
-float accel[3];
-int D_L;
-int D_R;
-int D;
-};
-
 
 
 enum State { 
@@ -28,3 +16,34 @@ enum State {
   REVERSING,        // Backing up because we are stuck
   APPROACH_TAG      // Driving towards a distant tag
 };
+
+struct position {
+    int global_map[map_size][map_size]; /* Map is in cm. 1 when there is an obstacle measured there, 0 when open */
+    int temp_map[map_size][map_size];
+    int roll;
+    int pitch;
+    int yaw;
+    float accel[3];
+    int D_L;
+    int D_R;
+    int D;
+    State currentState;
+};
+
+// Expose current state for shared usage across files
+// extern State currentState;
+
+
+// Global position tracking object
+extern struct position pos;
+// Navigation state variables
+extern unsigned long tagTimeout;
+extern unsigned long tagInterval;
+extern unsigned long ignoreCorrectionsUntil;
+extern float targetTagTurn;
+extern float targetTagError;
+
+// Function Declarations
+void updatePosition(float r, float p, float y, float ax, float ay, float az);
+void navigate();
+#endif
