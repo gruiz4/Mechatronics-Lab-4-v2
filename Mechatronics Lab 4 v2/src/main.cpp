@@ -3,25 +3,59 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
+#include "nav.h"
+#include "drivers.h"
+
 uint16_t BNO055_SAMPLERATE_DELAY_MS = 00;
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
+float pos_x = 0, pos_y = 0, pos_z = 0;
+float vel_x = 0, vel_y = 0, vel_z = 0;
+unsigned long lastTime = 0;
+
+
+
+int matchByte = 0;
+int gameTime = 0;
+int Xcoord = 0;
+int Ycoord = 0; 
 
 void setup(void) {
   Serial.begin(115200);
+  Serial1.begin(115200);
+
   while (!Serial) delay(10); 
 
   Serial.println("Orientation Sensor Test\n");
 
   if (!bno.begin()) {
-    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+    Serial.print("no BNO055 detected ...");
     while (1);
   }
+
+  pixy.init();
+  pixy.setLamp(0, 0); // Turns off the white LEDs, leaves the RGB LED off
+  motors.enableDrivers();
+  
+  pinMode(encoderA_R, INPUT); pinMode(encoderB_R, INPUT);
+  pinMode(encoderA_L, INPUT); pinMode(encoderB_L, INPUT);
+  
+  attachInterrupt(digitalPinToInterrupt(encoderA_R), interruptA_R, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoderB_R), interruptB_R, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoderA_L), interruptA_L, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoderB_L), interruptB_L, CHANGE);
   delay(1000);
 }
+
+
 void loop(void)
 {
   sensors_event_t orientationData;
+  sensors_event_t linearAccelData;
   bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
+  bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
+  unsigned long currentTime = micros();
+  float dt = (currentTime - lastTime) / 1000000.0;
+  lastTime = currentTime;
 
   // Accessing members directly: 
   // x = Yaw (Heading), y = Roll, z = Pitch
@@ -36,6 +70,79 @@ void loop(void)
   Serial.print(" | Yaw: ");
   Serial.println(yaw);
 
+  float accel_x = linearAccelData.acceleration.x;
+  float accel_y = linearAccelData.acceleration.y;
+  float accel_z = linearAccelData.acceleration.z;
+  pos_x += (vel_x * dt) + (0.5 * accel_x * dt * dt);
+  pos_y += (vel_y * dt) + (0.5 * accel_y * dt * dt);
+  pos_z += (vel_z * dt) + (0.5 * accel_z * dt * dt);
+
+  // Update Velocity: v = v0 + a*dt
+  vel_x += accel_x * dt;
+  vel_y += accel_y * dt;
+  vel_z += accel_z * dt;
   delay(BNO055_SAMPLERATE_DELAY_MS);
   
+}
+
+void getXbee(void) {
+  // 1. Send the query
+  Serial1.write('?');
+
+  const int len = 32; // Increased to ensure enough space for "1,2345,678,987\n"
+  char message[len];
+  
+  // 2. Read the response safely
+  // readBytesUntil waits for the newline character or times out (default 1000ms).
+  // It handles the Arduino vs. Serial speed difference automatically.
+  int bytesRead = Serial1.readBytesUntil('\n', message, len - 1);
+  
+  if (bytesRead == 0) {
+    return; // Exit if no data was received
+  }
+  
+  message[bytesRead] = '\0'; // Null-terminate the array to make it a valid C-string
+
+  // 3. Parse the data
+  int currentIndex = 0;
+
+  // Reset variables before parsing new data
+  matchByte = 0;
+  gameTime = 0;
+  Xcoord = 0;
+  Ycoord = 0;
+
+  // Extract matchByte
+  while (currentIndex < bytesRead && message[currentIndex] != ',') {
+    matchByte = (matchByte * 10) + (message[currentIndex] - '0');
+    currentIndex++;
+  }
+  currentIndex++; // Skip the comma
+
+  // Extract gameTime
+  while (currentIndex < bytesRead && message[currentIndex] != ',') {
+    gameTime = (gameTime * 10) + (message[currentIndex] - '0');
+    currentIndex++;
+  }
+  currentIndex++; // Skip the comma
+
+  // Extract Xcoord
+  while (currentIndex < bytesRead && message[currentIndex] != ',') {
+    Xcoord = (Xcoord * 10) + (message[currentIndex] - '0');
+    currentIndex++;
+  }
+  currentIndex++; // Skip the comma
+
+  // Extract Ycoord
+  // We also check for '\r' (carriage return) in case the sender uses "\r\n"
+  while (currentIndex < bytesRead && message[currentIndex] != '\r' && message[currentIndex] != '\0') {
+    Ycoord = (Ycoord * 10) + (message[currentIndex] - '0');
+    currentIndex++;
+  }
+
+  // 4. Verification (Optional)
+  Serial.print("Parsed -> Match: "); Serial.print(matchByte);
+  Serial.print(" | Time: "); Serial.print(gameTime);
+  Serial.print(" | X: "); Serial.print(Xcoord);
+  Serial.print(" | Y: "); Serial.println(Ycoord);
 }
