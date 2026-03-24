@@ -3,7 +3,7 @@
 
 #include "drivers.h"
 
-#define map_size 500
+#define map_size 10
 
 
 enum State { 
@@ -20,13 +20,13 @@ enum State {
 struct position {
     int global_map[map_size][map_size]; /* Map is in cm. 1 when there is an obstacle measured there, 0 when open */
     int temp_map[map_size][map_size];
-    int roll;
-    int pitch;
-    int yaw;
+    float roll;
+    float pitch;
+    float yaw;
     float accel[3];
-    int D_L;
-    int D_R;
-    int D;
+    float D_L;
+    float D_R;
+    float D;
     State currentState;
 };
 

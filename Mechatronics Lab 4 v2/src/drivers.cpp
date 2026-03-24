@@ -273,47 +273,6 @@ void drive_dist(float dist_cm) {
 }
 
 
-void turn_deg(float deg) {
-  long start_L, start_R;
-  noInterrupts();
-  start_L = count_L;
-  start_R = count_R;
-  interrupts();
-
-  // Calculate distance based on robot kinematics
-  float wheel_distance_to_travel = (abs(deg) / 360.0) * robot_turn_circumference;
-  long target_counts = (wheel_distance_to_travel / wheel_circumference) * COUNTS_PER_WHEEL_REV;
-
-  if (deg > 0) {
-    // Right Turn: Left motor (M1) forward, Right motor (M2) backward
-    motors.setM1Speed(TURN_SPEED);   
-    motors.setM2Speed(-TURN_SPEED);  
-  } else {
-    // Left Turn: Left motor (M1) backward, Right motor (M2) forward
-    motors.setM1Speed(-TURN_SPEED);  
-    motors.setM2Speed(TURN_SPEED);   
-  }
-
-  while (true) {
-    long current_L, current_R;
-    
-    noInterrupts();
-    current_L = count_L;
-    current_R = count_R;
-    interrupts();
-
-    long diff_L = abs(current_L - start_L);
-    long diff_R = abs(current_R - start_R);
-
-    if (diff_L >= target_counts || diff_R >= target_counts){
-      break;
-    }
-  }
-  
-  motors.setSpeeds(0, 0);
-}
-
-
 void getXbee(void) {
   // 1. Send the query
   Serial1.write('?');
