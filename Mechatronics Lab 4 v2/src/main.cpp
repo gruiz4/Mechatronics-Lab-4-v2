@@ -8,11 +8,13 @@
 #include "xbee.h"
 
 bool XBEE_valid = false;
+long last_XBEE_game_signal = 0;
+const int game_signal_hyst = 100;
 
 
 void setup(void) {
   Serial.begin(115200);
-  Serial1.begin(115200);
+  Serial2.begin(115200);
 
   Serial.println("Orientation Sensor Test\n");
 
@@ -41,21 +43,30 @@ void setup(void) {
 void loop(void) {
 
   updateIMU(); 
+  fetchXBeePosition(pos.xbeeX, pos.xbeeY, pos.gameByte);
+
+  if (pos.gameByte){
+    XBEE_valid = true;
+    last_XBEE_game_signal = millis();
+  }
+  else{
+    if (last_XBEE_game_signal - millis() > game_signal_hyst){
+    XBEE_valid = false;
+    }
+  }
+
 
   if (XBEE_valid){
   updateSensors();
   
-  
-  
-  fetchXBeePosition(pos.xbeeX, pos.xbeeY);
-
   navigate(); //does the navigation things.
   
   delay(BNO055_SAMPLERATE_DELAY_MS);
   }
 
   else{
-    if (fetchXBeePosition(pos.xbeeX, pos.xbeeY)){
+    
+    if (pos.gameByte){
       XBEE_valid = true;
       Serial.println("Valid Signal");
       updateIMU();

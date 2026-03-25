@@ -35,6 +35,7 @@ struct position {
     State currentState;
     int xbeeX;
     int xbeeY;
+    int gameByte;
 };
 
 // Expose current state for shared usage across files

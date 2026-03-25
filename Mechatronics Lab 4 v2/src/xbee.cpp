@@ -307,7 +307,7 @@ void setupXBee() {
 // ---------------------------------------------------------------
 // Standalone parsing function
 // ---------------------------------------------------------------
-bool fetchXBeePosition(int &outX, int &outY) {
+bool fetchXBeePosition(int &outX, int &outY, int &gameByte) {
   bool newPositionReady = false;
 
 #ifndef BROADCAST_FORMAT
@@ -362,6 +362,8 @@ bool fetchXBeePosition(int &outX, int &outY) {
   if (newPositionReady) {
     outX = xPos;
     outY = yPos;
+    gameByte = matchByte;
+
     Serial.println(outX);
     Serial.println(outY);
   }
