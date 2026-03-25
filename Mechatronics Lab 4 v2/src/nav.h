@@ -55,7 +55,7 @@ extern float targetHeading;
 
 // Function Declarations
 void getHeadingerror();
-void updatePosition(float r, float p, float y, float ax, float ay, float az);
+// void updatePosition(float r, float p, float y, float ax, float ay, float az); //removed. see commit.
 void navigate();
 bool check_end(int XFinish, int YFinish, int Xnow, int Ynow);
 #endif

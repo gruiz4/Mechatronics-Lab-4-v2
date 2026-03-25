@@ -27,7 +27,7 @@ void setup(void) {
     Serial.print("No Pixy");
     while (1);
   }
-  
+
   pixy.setLamp(0, 0); // Turns off the white LEDs, leaves the RGB LED off
   motors.enableDrivers();
   
@@ -75,11 +75,11 @@ void loop(void) {
 
 
   if (XBEE_valid){
-  updateSensors();
+    updateSensors();//Should be updating pos struct
   
-  navigate(); //does the navigation things.
+    navigate(); //does the navigation things.
   
-  delay(BNO055_SAMPLERATE_DELAY_MS);
+    delay(BNO055_SAMPLERATE_DELAY_MS);
   }
 
   else{

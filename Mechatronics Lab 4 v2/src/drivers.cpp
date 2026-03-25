@@ -49,9 +49,7 @@ const float WALL_DIST_TOO_BIG = 30.0; // If the sum of the sensors reads a value
 // ---------------------------------------------------------
 // SENSOR & STATE VARIABLES
 // ---------------------------------------------------------
-float D_L = 0.0;
-float D_R = 0.0;
-float D = 0.0;
+
 float prev_D = 0.0;
 float prev_D_L = 0.0;
 float prev_D_R = 0.0;
@@ -116,11 +114,18 @@ void updateIMU() {
   vel_z += accel_z * dt;
 
   // Pass calculated hardware states back to the global navigation struct
-  updatePosition(roll, pitch, yaw, accel_x, accel_y, accel_z);
+  // updatePosition(roll, pitch, yaw, accel_x, accel_y, accel_z);
+  pos.roll = orientationData.orientation.heading;
+  pos.yaw  = orientationData.orientation.roll;
+  pos.pitch = orientationData.orientation.pitch;
+
+  pos.accel[0] = linearAccelData.acceleration.x;
+  pos.accel[1] = linearAccelData.acceleration.y;
+  pos.accel[2] = linearAccelData.acceleration.z;
 }
 void updateSensors() {
-  D_L = sharpL.getDistance();
-  D_R = sharpR.getDistance();
+  pos.D_L = sharpL.getDistance();
+  pos.D_R = sharpR.getDistance();
 
   // PING))) Logic
   pinMode(PING_PIN, OUTPUT);
@@ -151,22 +156,22 @@ void updateSensors() {
   if (a > b) { float t = a; a = b; b = t; }
   if (b > c) { float t = b; b = c; c = t; }
   if (a > b) { float t = a; a = b; b = t; }
-  D = b; // 'b' is now the median value
+  pos.D = b; // 'b' is now the median value
 
 
   Serial.print("Front Distance:");
-  Serial.print(D);
+  Serial.print(pos.D);
   Serial.print(" | Right Distance:");
-  Serial.print(D_R);
+  Serial.print(pos.D_R);
   Serial.print(" | Left Distance:");
-  Serial.println(D_L);
+  Serial.println(pos.D_L);
 
 
   // STUCK DETECTION LOGIC: Check every 500ms
   if (millis() - lastStuckCheck > 500) {
-    float d_change = abs(D - prev_D);
-    float l_change = abs(D_L - prev_D_L);
-    float r_change = abs(D_R - prev_D_R);
+    float d_change = abs(pos.D - prev_D);
+    float l_change = abs(pos.D_L - prev_D_L);
+    float r_change = abs(pos.D_R - prev_D_R);
 
     // If robot is in a moving state but distances barely changed (less than 3cm)
     if (pos.currentState != SEARCHING && pos.currentState != TURN_TAG && pos.currentState != REVERSING) {
@@ -183,7 +188,7 @@ void updateSensors() {
       }
     }
 
-    prev_D = D; prev_D_L = D_L; prev_D_R = D_R;
+    prev_D = pos.D; prev_D_L = pos.D_L; prev_D_R = pos.D_R;
     lastStuckCheck = millis();
   }
 }

@@ -5,7 +5,7 @@ struct position pos = {
     {{0}}, {{0}},             // Maps
     0.0, 0.0, 0.0,            // Roll, pitch, yaw
     {0.0, 0.0, 0.0},          // Accel
-    0.0, 0.0, 0.0,            // Distances
+    99.0, 99.0, 99.0,            // Distances
     SEARCHING                 // Initial State
 };
 
@@ -63,18 +63,18 @@ void updateTargetHeading(float degreesToAdd) {
     if (targetHeading < 0.0) targetHeading += 360.0;
 }
 
-void updatePosition(float r, float p, float y, float ax, float ay, float az) {
-    pos.D_L = D_L;
-    pos.D_R = D_R;
-    pos.D = D;
+// void updatePosition(float r, float p, float y, float ax, float ay, float az) {
+//     pos.D_L = D_L;
+//     pos.D_R = D_R;
+//     pos.D = D;
     
-    pos.roll = r;
-    pos.pitch = p;
-    pos.yaw = y;
-    pos.accel[0] = ax;
-    pos.accel[1] = ay;
-    pos.accel[2] = az;
-}
+//     pos.roll = r;
+//     pos.pitch = p;
+//     pos.yaw = y;
+//     pos.accel[0] = ax;
+//     pos.accel[1] = ay;
+//     pos.accel[2] = az;
+// }
 
 void navigate() {
     // --- 1. EVALUATE STATE TRANSITIONS ---

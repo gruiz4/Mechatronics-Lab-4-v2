@@ -57,9 +57,7 @@ extern const float WALL_DIST_TOO_BIG;
 // ---------------------------------------------------------
 // Sensor & State Tracking Variables (Used in drivers.cpp)
 // ---------------------------------------------------------
-extern float D_L;
-extern float D_R;
-extern float D;
+
 extern float prev_D;
 extern float prev_D_L;
 extern float prev_D_R;
