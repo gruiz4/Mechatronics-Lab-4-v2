@@ -33,6 +33,21 @@ float integralIMU = 0.0;
 float prevErrorIMU = 0.0;
 unsigned long lastTimePID = 0;
 
+// Constants
+float kP_IR = 6.0;  
+float kI_IR = 0.1;  
+float kD_IR = 1.5;  
+
+float kP_IMU = 4.0; 
+float kI_IMU = 0.05;
+float kD_IMU = 0.5;
+
+// ----------------------------
+float kP_pixy = 0.5; //Used in Approach_tag state. ONLY proportional.
+
+
+float kP_Turn = 3.0; //Proportional variable for P-control in turning
+
 // Helper function to calculate heading error with 360-degree wrapping
 float getHeadingError() {
     float error = targetHeading - pos.yaw;
@@ -180,7 +195,7 @@ void navigate() {
                 }
 
                 // P-Controller for smooth turning
-                float kP_Turn = 3.0; 
+                
                 int minTurnSpeed = 65; // Minimum PWM to overcome motor friction
                 
                 int turnSpeed = abs(hErr) * kP_Turn;
@@ -238,15 +253,15 @@ void navigate() {
             break;
 
         case DRIVE_STRAIGHT:
-            {
-                float kP_IMU = 3.5; 
-                float hError = getHeadingError();
+            {   
+                // float kP_IMU = 3.5; 
+                // float hError = getHeadingError();
                 
-                int leftSpeed = constrain(BASE_SPEED - (hError * kP_IMU), 50, 255);
-                int rightSpeed = constrain(BASE_SPEED + (hError * kP_IMU), 50, 255);
+                // int leftSpeed = constrain(BASE_SPEED - (hError * kP_IMU), 50, 255);
+                // int rightSpeed = constrain(BASE_SPEED + (hError * kP_IMU), 50, 255);
                 
-                motors.setM1Speed(leftSpeed);
-                motors.setM2Speed(rightSpeed);
+                motors.setM1Speed(BASE_SPEED);
+                motors.setM2Speed(BASE_SPEED);
             }
             break;
 
@@ -266,9 +281,6 @@ void navigate() {
                 float derivativeIR = (errorIR - prevErrorIR) / dt;
                 prevErrorIR = errorIR;
                 
-                float kP_IR = 6.0;  
-                float kI_IR = 0.1;  
-                float kD_IR = 1.5;  
                 float pidIR = (errorIR * kP_IR) + (integralIR * kI_IR) + (derivativeIR * kD_IR);
 
                 // 2. IMU (Heading) PID Math
@@ -276,9 +288,7 @@ void navigate() {
                 float derivativeIMU = (errorIMU - prevErrorIMU) / dt;
                 prevErrorIMU = errorIMU;
 
-                float kP_IMU = 4.0; 
-                float kI_IMU = 0.05;
-                float kD_IMU = 0.5;
+                
                 float pidIMU = (errorIMU * kP_IMU) + (integralIMU * kI_IMU) + (derivativeIMU * kD_IMU);
 
                 // 3. Fusion / Motor Mixing
@@ -295,7 +305,7 @@ void navigate() {
 
         case APPROACH_TAG:
             {
-                float kP_pixy = 0.5; 
+                
                 int leftSpeed = constrain(BASE_SPEED + (targetTagError * kP_pixy), 50, 255);
                 int rightSpeed = constrain(BASE_SPEED - (targetTagError * kP_pixy), 50, 255);
                 motors.setM1Speed(leftSpeed);
