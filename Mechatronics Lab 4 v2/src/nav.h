@@ -2,8 +2,9 @@
 #define NAV_H
 
 #include "drivers.h"
+#include "xbee.h"
 
-#define map_size 10
+#define map_size 1
 
 
 enum State { 
@@ -28,6 +29,8 @@ struct position {
     float D_R;
     float D;
     State currentState;
+    int xbeeX;
+    int xbeeY;
 };
 
 // Expose current state for shared usage across files
@@ -46,4 +49,5 @@ extern float targetTagError;
 // Function Declarations
 void updatePosition(float r, float p, float y, float ax, float ay, float az);
 void navigate();
+void check_end(void);
 #endif
