@@ -4,7 +4,7 @@
 #include <Arduino.h>
 // ===== CONFIGURATION =====
 // Comment out the next line to only print X and Y
-#define DEBUG
+// #define DEBUG
 
 // In DEBUG mode, comment out the next line to hide invalid messages
 // (they are still counted in stats, just not printed)

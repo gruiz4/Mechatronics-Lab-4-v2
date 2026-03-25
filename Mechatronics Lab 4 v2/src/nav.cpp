@@ -17,7 +17,7 @@ float targetTagTurn = 0;
 float targetTagError = 0;
 
 const int CONFIRM_THRESHOLD = 5;
-const int MIN_BLOCK_WIDTH = 25;
+const int MIN_BLOCK_WIDTH = 15;
 int lastSignature = -1;
 int confirmCount = 0;
 
@@ -34,11 +34,11 @@ float prevErrorIMU = 0.0;
 unsigned long lastTimePID = 0;
 
 // Constants
-float kP_IR = 6.0;  
+float kP_IR = 2.0;  
 float kI_IR = 0.1;  
 float kD_IR = 1.5;  
 
-float kP_IMU = 4.0; 
+float kP_IMU = 6.0; 
 float kI_IMU = 0.05;
 float kD_IMU = 0.5;
 
@@ -83,6 +83,7 @@ void navigate() {
                          pos.currentState == CENTERING || pos.currentState == APPROACH_TAG);
 
     if (isEvaluating) {
+        
         bool tagConfirmedThisFrame = false;
         bool tagSeenInDistance = false;
 
@@ -90,6 +91,7 @@ void navigate() {
         bool isSafeToTurn = !isTooCloseToWall;
 
         pixy.ccc.getBlocks();
+        Serial.println("Check pixy");
         if (pixy.ccc.numBlocks > 0) {
             int sig = pixy.ccc.blocks[0].m_signature;
             int width = pixy.ccc.blocks[0].m_width;
@@ -97,15 +99,23 @@ void navigate() {
 
             if (width > MIN_BLOCK_WIDTH) { 
                 tagTimeout = millis() + tagInterval;
+                Serial.println("tag passes min size");
+                
                 if (sig == lastSignature) {
                     confirmCount++;
-                } else {
-                    lastSignature = sig;
-                    confirmCount = 1;
+                } 
+                
+                else {
+                    // Only reset if it's completely wrong, to allow for minor frame drops
+                    if (confirmCount > 0) {
+                        confirmCount--; // Degrade gracefully instead of snapping to 0
+                    } else {
+                        lastSignature = sig;
+                        confirmCount = 1;
+                    }
                 }
-
                 if (confirmCount >= CONFIRM_THRESHOLD) {
-                    if (pos.D <= 10) { 
+                    if (pos.D > 2.0 && pos.D <= 10) { 
                         if (isSafeToTurn) {
                             tagConfirmedThisFrame = true;
                             
@@ -123,6 +133,7 @@ void navigate() {
                         }
                     } else {
                         tagSeenInDistance = true;
+                        Serial.println("Tag seen in distance");
                         targetTagError = x_pos - 157.0;
                     }
                 }
@@ -143,9 +154,11 @@ void navigate() {
 
             // Priority 1: Front Wall Avoidance
             if (pos.D < (S / 3)) {
+                Serial.println("Wall avoidance");
                 if (pos.D_L < pos.D_R) {
                     updateTargetHeading(-90.0); // Turn Right
                     pos.currentState = PIVOT_RIGHT_DIST;
+                    
                 } else {
                     updateTargetHeading(90.0);  // Turn Left
                     pos.currentState = PIVOT_LEFT_DIST;
@@ -160,15 +173,15 @@ void navigate() {
                 pos.currentState = SEARCHING;
             } 
             // Priority 4: Maze Quirk (Tag Timeout)
-            else if (millis() > tagTimeout && (pos.D_L > S || pos.D_R > S)){
-                if (pos.D_R > pos.D_L){
-                    updateTargetHeading(-90.0);
-                    pos.currentState = PIVOT_RIGHT_DIST;
-                } else {
-                    updateTargetHeading(90.0);
-                    pos.currentState = PIVOT_LEFT_DIST;
-                }
-            }
+            // else if (millis() > tagTimeout && (pos.D_L > S || pos.D_R > S)){
+            //     if (pos.D_R > pos.D_L){
+            //         updateTargetHeading(-90.0);
+            //         pos.currentState = PIVOT_RIGHT_DIST;
+            //     } else {
+            //         updateTargetHeading(90.0);
+            //         pos.currentState = PIVOT_LEFT_DIST;
+            //     }
+            // }
             // Default
             else {
                 pos.currentState = DRIVE_STRAIGHT;
@@ -184,6 +197,7 @@ void navigate() {
         case PIVOT_LEFT_DIST:
         case PIVOT_RIGHT_DIST:
             {
+                Serial.println("Pivor Right Dist");
                 float hErr = getHeadingError();
                 
                 // If we are within 3 degrees of the target, the turn is complete
@@ -214,6 +228,7 @@ void navigate() {
             break;
 
         case REVERSING:
+             Serial.println("Reversing");
             if (reversePhase == 0) {
                 motors.setSpeeds(-BASE_SPEED, -BASE_SPEED);
                 if (reverseTimer == 0) reverseTimer = millis() + 1500; 
@@ -249,11 +264,12 @@ void navigate() {
             break;
 
         case SEARCHING:
+            Serial.println("Searching");
             motors.setSpeeds(0, 0); 
             break;
 
         case DRIVE_STRAIGHT:
-            {   
+            {   Serial.println("Straight");
                 // float kP_IMU = 3.5; 
                 // float hError = getHeadingError();
                 
@@ -266,7 +282,7 @@ void navigate() {
             break;
 
         case CENTERING:
-            {
+            {   Serial.println("Centering");
                 float errorIR = pos.D_R - pos.D_L; 
                 float errorIMU = getHeadingError();
 
@@ -305,7 +321,7 @@ void navigate() {
 
         case APPROACH_TAG:
             {
-                
+                Serial.println("Approach TagG      ");
                 int leftSpeed = constrain(BASE_SPEED + (targetTagError * kP_pixy), 50, 255);
                 int rightSpeed = constrain(BASE_SPEED - (targetTagError * kP_pixy), 50, 255);
                 motors.setM1Speed(leftSpeed);

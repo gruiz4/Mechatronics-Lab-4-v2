@@ -23,7 +23,11 @@ void setup(void) {
     while (1);
   }
 
-  pixy.init();
+  if (!pixy.init()){
+    Serial.print("No Pixy");
+    while (1);
+  }
+  
   pixy.setLamp(0, 0); // Turns off the white LEDs, leaves the RGB LED off
   motors.enableDrivers();
   
@@ -45,6 +49,19 @@ void loop(void) {
   updateIMU(); 
   fetchXBeePosition(pos.xbeeX, pos.xbeeY, pos.gameByte);
 
+  //Debug
+
+  // Serial.print("Roll:");
+  // Serial.print(pos.roll);
+  // Serial.print(" | Yaw:");
+  // Serial.print(pos.yaw);
+  // Serial.print(" | Pitch:");
+  // Serial.println(pos.pitch);
+  // updateSensors();
+  // smartDelay(500);
+
+
+
   if (pos.gameByte){
     XBEE_valid = true;
     last_XBEE_game_signal = millis();
@@ -52,6 +69,7 @@ void loop(void) {
   else{
     if (last_XBEE_game_signal - millis() > game_signal_hyst){
     XBEE_valid = false;
+    motors.setSpeeds(0,0);
     }
   }
 
@@ -75,5 +93,6 @@ void loop(void) {
     }
     
   }
+  // Serial.println(pos.currentState);
 
 }

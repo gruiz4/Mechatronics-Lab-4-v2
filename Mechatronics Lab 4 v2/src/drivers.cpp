@@ -6,7 +6,7 @@
 // ---------------------------------------------------------
 DualMAX14870MotorShield motors;
 Pixy2 pixy;
-SharpIR sharpL(SharpIR::GP2Y0A41SK0F, A2);  
+SharpIR sharpL(SharpIR::GP2Y0A41SK0F, A4);  
 SharpIR sharpR(SharpIR::GP2Y0A41SK0F, A3);
 
 uint16_t BNO055_SAMPLERATE_DELAY_MS = 0;
@@ -17,7 +17,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
 // ---------------------------------------------------------
 const int encoderA_L = 2;
 const int encoderB_L = 3;
-const int encoderA_R = 19;
+const int encoderA_R = 19;  
 const int encoderB_R = 18;
 
 // Xbee goes to UART2 bus (Serial 2), RX on 17, TX on 16.
@@ -55,7 +55,7 @@ float D = 0.0;
 float prev_D = 0.0;
 float prev_D_L = 0.0;
 float prev_D_R = 0.0;
-float D_history[3] = {0.0, 0.0, 0.0};
+float D_history[3] = {30.0, 30.0, 30.0};
 
 unsigned long lastStuckCheck = 0;
 int stuckCounter = 0;
@@ -153,12 +153,13 @@ void updateSensors() {
   if (a > b) { float t = a; a = b; b = t; }
   D = b; // 'b' is now the median value
 
-  // Serial.print("Front Distance:");
-  // Serial.print(D);
-  // Serial.print(" | Right Distance:");
-  // Serial.print(D_R);
-  // Serial.print(" | Left Distance:");
-  // Serial.println(D_L);
+
+  Serial.print("Front Distance:");
+  Serial.print(D);
+  Serial.print(" | Right Distance:");
+  Serial.print(D_R);
+  Serial.print(" | Left Distance:");
+  Serial.println(D_L);
 
 
   // STUCK DETECTION LOGIC: Check every 500ms
