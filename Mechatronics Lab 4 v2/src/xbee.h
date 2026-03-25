@@ -15,7 +15,7 @@
 //   >MTTTTRXXXYYY...CC;
 // Comment it out to use the old comma-separated format:
 //   matchByte,gameTime,X,Y
-#define BROADCAST_FORMAT
+// #define BROADCAST_FORMAT
 
 // Set your robot ID here (the letter assigned to this bot's XBee module)
 // In broadcast mode this must match the letter the coordinator assigns

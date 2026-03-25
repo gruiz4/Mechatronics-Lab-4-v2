@@ -362,6 +362,8 @@ bool fetchXBeePosition(int &outX, int &outY) {
   if (newPositionReady) {
     outX = xPos;
     outY = yPos;
+    Serial.println(outX);
+    Serial.println(outY);
   }
 
   return newPositionReady;

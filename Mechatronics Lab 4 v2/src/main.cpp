@@ -57,6 +57,7 @@ void loop(void) {
   else{
     if (fetchXBeePosition(pos.xbeeX, pos.xbeeY)){
       XBEE_valid = true;
+      Serial.println("Valid Signal");
       updateIMU();
       targetHeading = pos.yaw;
 

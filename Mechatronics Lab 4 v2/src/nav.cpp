@@ -9,7 +9,6 @@ struct position pos = {
     SEARCHING                 // Initial State
 };
 
-
 // Navigation/Pixy Tracking Variables
 unsigned long tagTimeout = 0;
 unsigned long tagInterval = 5000;
@@ -22,11 +21,17 @@ const int MIN_BLOCK_WIDTH = 25;
 int lastSignature = -1;
 int confirmCount = 0;
 
-const int Xfinish = 94;
-const int Yfinish = 30;
+// --- IMU & STATE VARIABLES ---
+float targetHeading = 0.0; 
+unsigned long reverseTimer = 0;
+int reversePhase = 0; 
 
-// Add this near the top of nav.cpp
-float targetHeading = 0.0; // Starts at 0, updates when you turn
+// --- PID VARIABLES FOR CENTERING ---
+float integralIR = 0.0;
+float prevErrorIR = 0.0;
+float integralIMU = 0.0;
+float prevErrorIMU = 0.0;
+unsigned long lastTimePID = 0;
 
 // Helper function to calculate heading error with 360-degree wrapping
 float getHeadingError() {
@@ -36,13 +41,18 @@ float getHeadingError() {
     return error;
 }
 
+// Helper to add degrees to target heading and maintain 0-360 wrap
+void updateTargetHeading(float degreesToAdd) {
+    targetHeading += degreesToAdd;
+    if (targetHeading >= 360.0) targetHeading -= 360.0;
+    if (targetHeading < 0.0) targetHeading += 360.0;
+}
+
 void updatePosition(float r, float p, float y, float ax, float ay, float az) {
-    // 1. Sync distance sensors from drivers
     pos.D_L = D_L;
     pos.D_R = D_R;
     pos.D = D;
     
-    // 2. Sync IMU orientation & acceleration
     pos.roll = r;
     pos.pitch = p;
     pos.yaw = y;
@@ -51,17 +61,19 @@ void updatePosition(float r, float p, float y, float ax, float ay, float az) {
     pos.accel[2] = az;
 }
 
-
 void navigate() {
     // --- 1. EVALUATE STATE TRANSITIONS ---
-    if (pos.currentState != TURN_TAG && pos.currentState != REVERSING) {
+    // Only evaluate new transitions if we are not currently locked in a mandatory maneuver
+    bool isEvaluating = (pos.currentState == SEARCHING || pos.currentState == DRIVE_STRAIGHT || 
+                         pos.currentState == CENTERING || pos.currentState == APPROACH_TAG);
+
+    if (isEvaluating) {
         bool tagConfirmedThisFrame = false;
         bool tagSeenInDistance = false;
 
         bool isTooCloseToWall = (pos.D_L < MIN_TURN_CLEARANCE || pos.D_R < MIN_TURN_CLEARANCE);
         bool isSafeToTurn = !isTooCloseToWall;
 
-        //  Checking for Color Turning Tags
         pixy.ccc.getBlocks();
         if (pixy.ccc.numBlocks > 0) {
             int sig = pixy.ccc.blocks[0].m_signature;
@@ -81,9 +93,11 @@ void navigate() {
                     if (pos.D <= 10) { 
                         if (isSafeToTurn) {
                             tagConfirmedThisFrame = true;
-                            if (sig == 1) targetTagTurn = -90.0;
-                            if (sig == 2) targetTagTurn = 180.0;
-                            if (sig == 3) targetTagTurn = 100.0;
+                            
+                            // SET ABSOLUTE HEADING BEFORE EXECUTING TURN
+                            if (sig == 1) updateTargetHeading(-90.0);
+                            if (sig == 2) updateTargetHeading(180.0);
+                            if (sig == 3) updateTargetHeading(90.0); 
                             
                             pos.currentState = TURN_TAG;
                             confirmCount = 0;
@@ -103,66 +117,120 @@ void navigate() {
             lastSignature = -1;
         }
 
-        if (tagSeenInDistance && (pos.currentState != TURN_TAG)) {
+        if (tagSeenInDistance && !tagConfirmedThisFrame) {
             pos.currentState = APPROACH_TAG;
         }
-        else if (!tagConfirmedThisFrame && pos.currentState != TURN_TAG) {
+        else if (!tagConfirmedThisFrame) {
+            
+            float hErr = getHeadingError();
+            bool offCenter = (abs(pos.D_L - pos.D_R) > C);
+            bool offHeading = (abs(hErr) > 6.0); 
+
+            // Priority 1: Front Wall Avoidance
             if (pos.D < (S / 3)) {
-                pos.currentState = (pos.D_L < pos.D_R) ? PIVOT_RIGHT_DIST : PIVOT_LEFT_DIST;
+                if (pos.D_L < pos.D_R) {
+                    updateTargetHeading(-90.0); // Turn Right
+                    pos.currentState = PIVOT_RIGHT_DIST;
+                } else {
+                    updateTargetHeading(90.0);  // Turn Left
+                    pos.currentState = PIVOT_LEFT_DIST;
+                }
             } 
-            else if (pos.D_L + pos.D_R <= WALL_DIST_TOO_BIG && abs(pos.D_L - pos.D_R) > C && millis() > ignoreCorrectionsUntil) {
+            // Priority 2: Centering & Heading Correction
+            else if (pos.D_L + pos.D_R <= WALL_DIST_TOO_BIG && (offCenter || offHeading) && millis() > ignoreCorrectionsUntil) {
                 pos.currentState = CENTERING;
             } 
+            // Priority 3: Open space
             else if (pos.D_L > S && pos.D_R > S) {
                 pos.currentState = SEARCHING;
             } 
+            // Priority 4: Maze Quirk (Tag Timeout)
             else if (millis() > tagTimeout && (pos.D_L > S || pos.D_R > S)){
                 if (pos.D_R > pos.D_L){
+                    updateTargetHeading(-90.0);
                     pos.currentState = PIVOT_RIGHT_DIST;
-                }
-                else{
+                } else {
+                    updateTargetHeading(90.0);
                     pos.currentState = PIVOT_LEFT_DIST;
                 }
             }
+            // Default
             else {
                 pos.currentState = DRIVE_STRAIGHT;
             }
         }
     }
 
-    if(check_end(Xfinish, Yfinish, pos.xbeeX, pos.xbeeY)){
-                pos.currentState = PAUSE;
-    }
-
     // --- 2. EXECUTE CURRENT STATE ---
     switch (pos.currentState) {
+        
+        // Combine all absolute turns into one robust IMU tracking block
         case TURN_TAG:
-            motors.setSpeeds(0, 0); 
-            smartDelay(150); 
-            
-            turn_deg(targetTagTurn); // This blocks the code!
-            resetIMUTimer();         // <--- Reset time so 'dt' isn't massive
-            
-            targetHeading += targetTagTurn;
-            if (targetHeading >= 360.0) targetHeading -= 360.0;
-            if (targetHeading < 0.0) targetHeading += 360.0;
+        case PIVOT_LEFT_DIST:
+        case PIVOT_RIGHT_DIST:
+            {
+                float hErr = getHeadingError();
+                
+                // If we are within 3 degrees of the target, the turn is complete
+                if (abs(hErr) <= 3.0) {
+                    motors.setSpeeds(0, 0);
+                    ignoreCorrectionsUntil = millis() + 500; 
+                    pos.currentState = SEARCHING; // Drop into searching to naturally drive straight
+                    break;
+                }
 
-            smartDelay(150); 
-            
-            drive_dist(1.0);         // This blocks the code!
-            resetIMUTimer();         // <--- Reset time again
-            
-            ignoreCorrectionsUntil = millis() + 500; 
-            pos.currentState = SEARCHING; 
+                // P-Controller for smooth turning
+                float kP_Turn = 3.0; 
+                int minTurnSpeed = 65; // Minimum PWM to overcome motor friction
+                
+                int turnSpeed = abs(hErr) * kP_Turn;
+                turnSpeed = constrain(turnSpeed, minTurnSpeed, TURN_SPEED);
+
+                // Assuming positive hErr means target is to the Left (Counter-Clockwise)
+                // If this spins the wrong way, swap the positive and negative signs below.
+                if (hErr > 0) {
+                    motors.setM1Speed(-turnSpeed); 
+                    motors.setM2Speed(turnSpeed);
+                } else {
+                    motors.setM1Speed(turnSpeed);
+                    motors.setM2Speed(-turnSpeed);
+                }
+            }
             break;
 
         case REVERSING:
-            motors.setSpeeds(-BASE_SPEED, -BASE_SPEED);
-            delay(1500); 
-            motors.setSpeeds(0, 0);
-            turn_deg((pos.D_L < pos.D_R) ? 30.0 : -30.0); 
-            ignoreCorrectionsUntil = millis() + 1500; 
-            pos.currentState = SEARCHING;
+            if (reversePhase == 0) {
+                motors.setSpeeds(-BASE_SPEED, -BASE_SPEED);
+                if (reverseTimer == 0) reverseTimer = millis() + 1500; 
+
+                // Done backing up, set absolute angle to escape
+                if (millis() > reverseTimer) {
+                    reversePhase = 1; 
+                    if (pos.D_L < pos.D_R) {
+                        updateTargetHeading(-45.0); // Escape right
+                    } else {
+                        updateTargetHeading(45.0);  // Escape left
+                    }
+                }
+            } 
+            else if (reversePhase == 1) {
+                // Use the exact same closed-loop logic to turn out of the corner
+                float hErr = getHeadingError();
+                if (abs(hErr) <= 3.0) {
+                    motors.setSpeeds(0, 0);
+                    ignoreCorrectionsUntil = millis() + 1500; 
+                    pos.currentState = SEARCHING;
+                    reversePhase = 0; 
+                    reverseTimer = 0;
+                } else {
+                    int turnSpeed = TURN_SPEED; 
+                    if (hErr > 0) {
+                        motors.setSpeeds(-turnSpeed, turnSpeed);
+                    } else {
+                        motors.setSpeeds(turnSpeed, -turnSpeed);
+                    }
+                }
+            }
             break;
 
         case SEARCHING:
@@ -170,59 +238,72 @@ void navigate() {
             break;
 
         case DRIVE_STRAIGHT:
-            motors.setSpeeds(BASE_SPEED, BASE_SPEED);
+            {
+                float kP_IMU = 3.5; 
+                float hError = getHeadingError();
+                
+                int leftSpeed = constrain(BASE_SPEED - (hError * kP_IMU), 50, 255);
+                int rightSpeed = constrain(BASE_SPEED + (hError * kP_IMU), 50, 255);
+                
+                motors.setM1Speed(leftSpeed);
+                motors.setM2Speed(rightSpeed);
+            }
             break;
 
         case CENTERING:
             {
-                float error = pos.D_R - pos.D_L; 
-                float kP = 8.0; 
+                float errorIR = pos.D_R - pos.D_L; 
+                float errorIMU = getHeadingError();
+
+                // PID Time Calculation
+                unsigned long now = millis();
+                float dt = (now - lastTimePID) / 1000.0;
+                if (dt <= 0.0 || dt > 0.1) dt = 0.05; 
+                lastTimePID = now;
+
+                // 1. IR (Lateral) PID Math
+                integralIR += errorIR * dt;
+                float derivativeIR = (errorIR - prevErrorIR) / dt;
+                prevErrorIR = errorIR;
+                
+                float kP_IR = 6.0;  
+                float kI_IR = 0.1;  
+                float kD_IR = 1.5;  
+                float pidIR = (errorIR * kP_IR) + (integralIR * kI_IR) + (derivativeIR * kD_IR);
+
+                // 2. IMU (Heading) PID Math
+                integralIMU += errorIMU * dt;
+                float derivativeIMU = (errorIMU - prevErrorIMU) / dt;
+                prevErrorIMU = errorIMU;
+
+                float kP_IMU = 4.0; 
+                float kI_IMU = 0.05;
+                float kD_IMU = 0.5;
+                float pidIMU = (errorIMU * kP_IMU) + (integralIMU * kI_IMU) + (derivativeIMU * kD_IMU);
+
+                // 3. Fusion / Motor Mixing
                 int centerBaseSpeed = BASE_SPEED * 5 / 4;
-                int leftSpeed = constrain(centerBaseSpeed + (error * kP), 50, 255);
-                int rightSpeed = constrain(centerBaseSpeed - (error * kP), 50, 255);
+                
+                // Add IR to push to center, Subtract IMU to resist twisting
+                int leftSpeed = constrain(centerBaseSpeed + pidIR - pidIMU, 50, 255);
+                int rightSpeed = constrain(centerBaseSpeed - pidIR + pidIMU, 50, 255);
+                
                 motors.setM1Speed(leftSpeed);
                 motors.setM2Speed(rightSpeed);
             }
-            break;  
+            break;
 
         case APPROACH_TAG:
             {
-                float kP_pixy = .5; 
+                float kP_pixy = 0.5; 
                 int leftSpeed = constrain(BASE_SPEED + (targetTagError * kP_pixy), 50, 255);
                 int rightSpeed = constrain(BASE_SPEED - (targetTagError * kP_pixy), 50, 255);
                 motors.setM1Speed(leftSpeed);
                 motors.setM2Speed(rightSpeed);
-            }
-            break;
-
-        case PIVOT_LEFT_DIST:
-            motors.setM1Speed(-TURN_SPEED);
-            motors.setM2Speed(TURN_SPEED);
-            break;
-
-        case PIVOT_RIGHT_DIST:
-            motors.setM1Speed(TURN_SPEED);
-            motors.setM2Speed(-TURN_SPEED);
-            break;
-
-        case PAUSE:
-            if(!check_end(Xfinish, Yfinish, pos.xbeeX, pos.xbeeY)){
-                pos.currentState = SEARCHING;
-                break;
+                
+                // Keep syncing heading dynamically so when the tag vanishes, it locks in the angle
+                targetHeading = pos.yaw; 
             }
             break;
     }
 }
-
-bool check_end(int XFinish, int YFinish, int Xnow, int Ynow){
-    if ((abs(Xnow - XFinish)<= XbeeXtol) && (abs(Ynow - YFinish) <= XbeeYtol)){
-        return true;
-    }
-    else{
-        return false;
-    }
-
-}
-
-
-
