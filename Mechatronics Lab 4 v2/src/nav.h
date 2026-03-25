@@ -6,6 +6,9 @@
 
 #define map_size 1
 
+#define XbeeXtol 5
+#define XbeeYtol 5
+
 
 enum State { 
   SEARCHING,        // No walls, no tags
@@ -15,7 +18,8 @@ enum State {
   PIVOT_RIGHT_DIST, // Obstacle in front, turning right
   TURN_TAG,         // Executing a color-based turn
   REVERSING,        // Backing up because we are stuck
-  APPROACH_TAG      // Driving towards a distant tag
+  APPROACH_TAG,      // Driving towards a distant tag
+  PAUSE             // State used when it finishes the course
 };
 
 struct position {
@@ -46,8 +50,11 @@ extern unsigned long ignoreCorrectionsUntil;
 extern float targetTagTurn;
 extern float targetTagError;
 
+extern float targetHeading;
+
 // Function Declarations
+void getHeadingerror();
 void updatePosition(float r, float p, float y, float ax, float ay, float az);
 void navigate();
-void check_end(void);
+bool check_end(int XFinish, int YFinish, int Xnow, int Ynow);
 #endif

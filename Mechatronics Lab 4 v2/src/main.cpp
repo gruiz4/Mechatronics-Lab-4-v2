@@ -5,6 +5,9 @@
 
 #include "nav.h"
 #include "drivers.h"
+#include "xbee.h"
+
+bool XBEE_valid = false;
 
 
 void setup(void) {
@@ -29,16 +32,36 @@ void setup(void) {
   attachInterrupt(digitalPinToInterrupt(encoderB_R), interruptB_R, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderA_L), interruptA_L, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderB_L), interruptB_L, CHANGE);
+
+
+  setupXBee();
   delay(1000);
 }
 
 void loop(void) {
+
+  updateIMU(); 
+
+  if (XBEE_valid){
   updateSensors();
   
-  // This calculates the physics math and automatically syncs it back to the global `pos` struct
-  updateIMU(); 
+  
+  
+  fetchXBeePosition(pos.xbeeX, pos.xbeeY);
 
   navigate(); //does the navigation things.
   
   delay(BNO055_SAMPLERATE_DELAY_MS);
+  }
+
+  else{
+    if (fetchXBeePosition(pos.xbeeX, pos.xbeeY)){
+      XBEE_valid = true;
+      updateIMU();
+      targetHeading = pos.yaw;
+
+    }
+    
+  }
+
 }

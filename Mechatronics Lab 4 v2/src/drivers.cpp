@@ -20,6 +20,7 @@ const int encoderB_L = 3;
 const int encoderA_R = 19;
 const int encoderB_R = 18;
 
+// Xbee goes to UART2 bus (Serial 2), RX on 17, TX on 16.
 // Encoder Counts
 volatile long count_R = 0;
 volatile long count_L = 0;
@@ -62,11 +63,6 @@ State currentState = SEARCHING;
 
 
 
-int matchByte = 0;
-int gameTime = 0;
-int Xcoord = 0;
-int Ycoord = 0;
-
 // Local IMU tracking variables
 float pos_x = 0, pos_y = 0, pos_z = 0;
 float vel_x = 0, vel_y = 0, vel_z = 0;
@@ -75,6 +71,13 @@ unsigned long lastTimeIMU = 0;
 // ---------------------------------------------------------
 // SENSOR & HARDWARE FUNCTIONS
 // ---------------------------------------------------------
+void smartDelay(unsigned long ms) {
+    unsigned long start = millis();
+    while (millis() - start < ms) {
+        updateIMU(); 
+        // Optional: fetchXBeePosition(pos.xbeeX, pos.xbeeY); to keep XBee buffer empty
+    }
+}
 
 void setupIMU() {
   Serial.println("Orientation Sensor Test\n");
@@ -84,6 +87,7 @@ void setupIMU() {
   }
   delay(1000);
 }
+
 
 void updateIMU() {
   sensors_event_t orientationData;
@@ -272,62 +276,3 @@ void drive_dist(float dist_cm) {
   motors.setSpeeds(0, 0);
 }
 
-
-void getXbee(void) {
-  // 1. Send the query
-  Serial1.write('?');
-
-  const int len = 32; 
-  char message[len];
-  
-  // 2. Read the response safely
-  int bytesRead = Serial1.readBytesUntil('\n', message, len - 1);
-  
-  if (bytesRead == 0) {
-    return; // Exit if no data was received
-  }
-  
-  message[bytesRead] = '\0'; 
-
-  // 3. Parse the data
-  int currentIndex = 0;
-
-  // Reset variables before parsing new data
-  matchByte = 0;
-  gameTime = 0;
-  Xcoord = 0;
-  Ycoord = 0;
-
-  // Extract matchByte
-  while (currentIndex < bytesRead && message[currentIndex] != ',') {
-    matchByte = (matchByte * 10) + (message[currentIndex] - '0');
-    currentIndex++;
-  }
-  currentIndex++; // Skip the comma
-
-  // Extract gameTime
-  while (currentIndex < bytesRead && message[currentIndex] != ',') {
-    gameTime = (gameTime * 10) + (message[currentIndex] - '0');
-    currentIndex++;
-  }
-  currentIndex++; 
-
-  // Extract Xcoord
-  while (currentIndex < bytesRead && message[currentIndex] != ',') {
-    Xcoord = (Xcoord * 10) + (message[currentIndex] - '0');
-    currentIndex++;
-  }
-  currentIndex++; 
-
-  // Extract Ycoord
-  while (currentIndex < bytesRead && message[currentIndex] != '\r' && message[currentIndex] != '\0') {
-    Ycoord = (Ycoord * 10) + (message[currentIndex] - '0');
-    currentIndex++;
-  }
-
-  // Optional print for verification
-  // Serial.print("Parsed -> Match: "); Serial.print(matchByte);
-  // Serial.print(" | Time: "); Serial.print(gameTime);
-  // Serial.print(" | X: "); Serial.print(Xcoord);
-  // Serial.print(" | Y: "); Serial.println(Ycoord);
-}

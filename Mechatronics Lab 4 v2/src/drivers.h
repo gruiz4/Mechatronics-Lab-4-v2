@@ -69,19 +69,7 @@ extern unsigned long lastStuckCheck;
 extern int stuckCounter;
 
 
-// ---------------------------------------------------------
-// XBee Tracking Variables
-// ---------------------------------------------------------
-extern int matchByte;
-extern int gameTime;
-extern int Xcoord;
-extern int Ycoord;
 
-// ---------------------------------------------------------
-// Function Declarations
-// ---------------------------------------------------------
-// ... [existing declarations] ...
-void getXbee();
 
 // ---------------------------------------------------------
 // Function Declarations
@@ -98,7 +86,9 @@ void updateSensors();
 void setupIMU();
 void updateIMU();
 
-void getXbee();
+void smartDelay(unsigned long ms);
+
+
 void updateBNO055(class BNO);
 
 #endif

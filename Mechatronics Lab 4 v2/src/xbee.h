@@ -93,10 +93,12 @@ bool parseBroadcast(const char* buf);
 
 bool parseCsv(const char* buf);
 bool parseResponse(const char* buf);
-void processMessage();
 
-// Core flow (rename these if calling from a main sketch's own setup/loop)
-void setup();
-void loop();
+bool processMessage();
+
+void setupXBee();
+
+bool fetchXBeePosition(int &outX, int &outY);
+
 
 #endif // ZIGBEE_TRACKING_H

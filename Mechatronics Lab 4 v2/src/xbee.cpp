@@ -165,16 +165,20 @@ bool parseResponse(const char* buf) {
 #endif
 }
 
+// ... [Keep everything above processMessage() exactly the same] ...
+
 // ---------------------------------------------------------------
 // Process a completed message
 // ---------------------------------------------------------------
-void processMessage() {
-  if (rxIndex == 0) return;
+bool processMessage() {
+  if (rxIndex == 0) return false;
 
   rxBuffer[rxIndex] = '\0'; 
   totalResponses++;
 
-  if (parseResponse(rxBuffer)) {
+  bool success = parseResponse(rxBuffer);
+
+  if (success) {
     validCoords++;
     hzCounter++;
 
@@ -264,12 +268,15 @@ void processMessage() {
   }
 
   rxIndex = 0; 
+  return success;
 }
 
 // ---------------------------------------------------------------
-void setup() {
-  Serial.begin(115200);   
-  Serial1.begin(115200);  
+// Renamed from setup() to setupXBee()
+// ---------------------------------------------------------------
+void setupXBee() {
+  // Serial.begin and Serial2.begin are already in main.cpp, 
+  // so you can leave them here or remove them. 
   delay(500);
 
   Serial.println(F("=== XBee Tracking Started ==="));
@@ -297,4 +304,65 @@ void setup() {
   lastHzTime     = millis();
 }
 
+// ---------------------------------------------------------------
+// Standalone parsing function
+// ---------------------------------------------------------------
+bool fetchXBeePosition(int &outX, int &outY) {
+  bool newPositionReady = false;
 
+#ifndef BROADCAST_FORMAT
+  Serial2.print('?');
+  totalQueries++;
+#endif
+
+  unsigned long now = millis();
+  if (now - lastHzTime >= 1000) {
+    samplingRateHz = (float)hzCounter;
+    hzCounter = 0;
+    lastHzTime = now;
+  }
+
+  while (Serial2.available()) {
+    char c = Serial2.read();
+    lastRxTime = millis();
+
+#ifdef BROADCAST_FORMAT
+    if (c == ';') {
+      if (rxIndex < (int)(sizeof(rxBuffer) - 1)) {
+        rxBuffer[rxIndex++] = c;
+      }
+      if (processMessage()) newPositionReady = true;
+    } else if (c == '>') {
+      rxIndex = 0;
+      rxBuffer[rxIndex++] = c;
+    } else {
+      if (rxIndex < (int)(sizeof(rxBuffer) - 1)) {
+        rxBuffer[rxIndex++] = c;
+      } else {
+        rxIndex = 0; 
+      }
+    }
+#else
+    if (c == '\n' || c == '\r') {
+      if (processMessage()) newPositionReady = true;
+    } else {
+      if (rxIndex < (int)(sizeof(rxBuffer) - 1)) {
+        rxBuffer[rxIndex++] = c;
+      } else {
+        if (processMessage()) newPositionReady = true;
+      }
+    }
+#endif
+  }
+
+  if (rxIndex > 0 && (millis() - lastRxTime >= RX_TIMEOUT_MS)) {
+    if (processMessage()) newPositionReady = true;
+  }
+
+  if (newPositionReady) {
+    outX = xPos;
+    outY = yPos;
+  }
+
+  return newPositionReady;
+}

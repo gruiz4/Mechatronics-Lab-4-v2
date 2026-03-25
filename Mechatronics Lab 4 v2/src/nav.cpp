@@ -9,6 +9,7 @@ struct position pos = {
     SEARCHING                 // Initial State
 };
 
+
 // Navigation/Pixy Tracking Variables
 unsigned long tagTimeout = 0;
 unsigned long tagInterval = 5000;
@@ -21,6 +22,19 @@ const int MIN_BLOCK_WIDTH = 25;
 int lastSignature = -1;
 int confirmCount = 0;
 
+const int Xfinish = 94;
+const int Yfinish = 30;
+
+// Add this near the top of nav.cpp
+float targetHeading = 0.0; // Starts at 0, updates when you turn
+
+// Helper function to calculate heading error with 360-degree wrapping
+float getHeadingError() {
+    float error = targetHeading - pos.yaw;
+    if (error > 180.0) error -= 360.0;
+    if (error < -180.0) error += 360.0;
+    return error;
+}
 
 void updatePosition(float r, float p, float y, float ax, float ay, float az) {
     // 1. Sync distance sensors from drivers
@@ -47,6 +61,7 @@ void navigate() {
         bool isTooCloseToWall = (pos.D_L < MIN_TURN_CLEARANCE || pos.D_R < MIN_TURN_CLEARANCE);
         bool isSafeToTurn = !isTooCloseToWall;
 
+        //  Checking for Color Turning Tags
         pixy.ccc.getBlocks();
         if (pixy.ccc.numBlocks > 0) {
             int sig = pixy.ccc.blocks[0].m_signature;
@@ -115,14 +130,28 @@ void navigate() {
         }
     }
 
+    if(check_end(Xfinish, Yfinish, pos.xbeeX, pos.xbeeY)){
+                pos.currentState = PAUSE;
+    }
+
     // --- 2. EXECUTE CURRENT STATE ---
     switch (pos.currentState) {
         case TURN_TAG:
             motors.setSpeeds(0, 0); 
-            delay(150); 
-            turn_deg(targetTagTurn);
-            delay(150); 
-            drive_dist(1.0); 
+            smartDelay(150); 
+            
+            turn_deg(targetTagTurn); // This blocks the code!
+            resetIMUTimer();         // <--- Reset time so 'dt' isn't massive
+            
+            targetHeading += targetTagTurn;
+            if (targetHeading >= 360.0) targetHeading -= 360.0;
+            if (targetHeading < 0.0) targetHeading += 360.0;
+
+            smartDelay(150); 
+            
+            drive_dist(1.0);         // This blocks the code!
+            resetIMUTimer();         // <--- Reset time again
+            
             ignoreCorrectionsUntil = millis() + 500; 
             pos.currentState = SEARCHING; 
             break;
@@ -154,7 +183,7 @@ void navigate() {
                 motors.setM1Speed(leftSpeed);
                 motors.setM2Speed(rightSpeed);
             }
-            break;
+            break;  
 
         case APPROACH_TAG:
             {
@@ -175,7 +204,24 @@ void navigate() {
             motors.setM1Speed(TURN_SPEED);
             motors.setM2Speed(-TURN_SPEED);
             break;
+
+        case PAUSE:
+            if(!check_end(Xfinish, Yfinish, pos.xbeeX, pos.xbeeY)){
+                pos.currentState = SEARCHING;
+                break;
+            }
+            break;
     }
+}
+
+bool check_end(int XFinish, int YFinish, int Xnow, int Ynow){
+    if ((abs(Xnow - XFinish)<= XbeeXtol) && (abs(Ynow - YFinish) <= XbeeYtol)){
+        return true;
+    }
+    else{
+        return false;
+    }
+
 }
 
 
