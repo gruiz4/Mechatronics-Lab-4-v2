@@ -38,8 +38,8 @@ float wheel_circumference = 2.0 * PI_VAL * RADIUS;
 
 const float S = 20.0;     // Grid square side length (cm)
 const float C = 2.0;      // Off-center threshold (cm)
-const int BASE_SPEED = 90;
-const int TURN_SPEED = 40;
+const int BASE_SPEED = 100;
+const int TURN_SPEED = 80;
 
 
 // Safety Constants
@@ -229,7 +229,7 @@ void turn_deg(float deg) {
     motors.setM1Speed(-TURN_SPEED);  
     motors.setM2Speed(TURN_SPEED);   
   }
-  
+
   while (true) {
     long current_L, current_R;
     noInterrupts();

@@ -41,8 +41,8 @@ float kI_IR = 0;
 float kD_IR = 0;  
 
 float kP_IMU = 5.0; 
-float kI_IMU = 0.05;
-float kD_IMU = 0.5;
+float kI_IMU = 0.5;
+float kD_IMU = 0.3;
 
 // ----------------------------
 float kP_pixy = 0.5; //Used in Approach_tag state. ONLY proportional.
@@ -130,9 +130,16 @@ void navigate() {
                             tagConfirmedThisFrame = true;
                             
                             // SET ABSOLUTE HEADING BEFORE EXECUTING TURN
-                            if (sig == 1) updateTargetHeading(90.0);
-                            if (sig == 2) updateTargetHeading(180.0);
-                            if (sig == 3) updateTargetHeading(-90.0); 
+                            if (sig == 1){
+                                updateTargetHeading(90.0);
+                                target_turn_deg = -90.0; //I'm pretty sure 
+                            }
+                            if (sig == 2){
+                                updateTargetHeading(180.0);
+                                target_turn_deg = 200.0;}
+                            if (sig == 3){
+                                updateTargetHeading(-90.0); 
+                                target_turn_deg = 90.0;}
                             
                             pos.currentState = TURN_TAG;
                             confirmCount = 0;
@@ -163,7 +170,6 @@ void navigate() {
             bool offHeading = (abs(hErr) > 6.0); 
 
             // Priority 1: Front Wall Avoidance
-            // Priority 1: Front Wall Avoidance Example
             if (pos.D > 0.0 && pos.D < (S / 3)) {
                 turn_initialized = false; // Reset the turn tracker
                 
@@ -204,9 +210,8 @@ void navigate() {
     switch (pos.currentState) {
         
         // Combine all absolute turns into one robust IMU tracking block
-        case TURN_TAG:;
-        case PIVOT_LEFT_DIST:;
-
+        case TURN_TAG:
+        case PIVOT_LEFT_DIST:
         case PIVOT_RIGHT_DIST:
             {
                 // PHASE 1: Initialize the turn once
@@ -246,7 +251,7 @@ void navigate() {
                         turn_initialized = false; // Reset for the next time we need to turn
                         
                         // Ignore standard corrections briefly so it doesn't violently snap back
-                        ignoreCorrectionsUntil = millis() + 10; 
+                        ignoreCorrectionsUntil = millis() + 50; 
                         
                         // Drop into searching; next loop will automatically handle centering/driving straight
                         pos.currentState = SEARCHING; 
