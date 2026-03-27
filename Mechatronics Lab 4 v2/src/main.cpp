@@ -22,11 +22,8 @@ void setup(void) {
     Serial.print("no BNO055 detected ...");
     while (1);
   }
-
-  if (!pixy.init()){
-    Serial.print("No Pixy");
-    while (1);
-  }
+  
+  pixy.init();
 
   pixy.setLamp(0, 0); // Turns off the white LEDs, leaves the RGB LED off
   motors.enableDrivers();
@@ -41,6 +38,10 @@ void setup(void) {
 
 
   setupXBee();
+  updateIMU(); 
+  
+
+  targetHeading = pos.yaw;
   delay(1000);
 }
 
@@ -48,6 +49,10 @@ void loop(void) {
 
   updateIMU(); 
   fetchXBeePosition(pos.xbeeX, pos.xbeeY, pos.gameByte);
+  updateSensors();//Should be updating pos struct
+  
+  navigate(); //does the navigation things.
+  
 
   //Debug
 
@@ -59,40 +64,44 @@ void loop(void) {
   // Serial.println(pos.pitch);
   // updateSensors();
   // smartDelay(500);
-
-
-
-  if (pos.gameByte){
-    XBEE_valid = true;
-    last_XBEE_game_signal = millis();
-  }
-  else{
-    if (last_XBEE_game_signal - millis() > game_signal_hyst){
-    XBEE_valid = false;
-    motors.setSpeeds(0,0);
-    }
-  }
-
-
-  if (XBEE_valid){
-    updateSensors();//Should be updating pos struct
   
-    navigate(); //does the navigation things.
+
+  Serial.println(pos.currentState);
+
+  // if (pos.gameByte){
+  //   XBEE_valid = true;
+  //   last_XBEE_game_signal = millis();
+  // }
+  // else{
+  //   if (last_XBEE_game_signal - millis() > game_signal_hyst){
+  //   XBEE_valid = false;
+  //   motors.setSpeeds(0,0);
+  //   }
+  // }
+
+
+  // if (XBEE_valid){
+  //   updateSensors();//Should be updating pos struct
   
-    delay(BNO055_SAMPLERATE_DELAY_MS);
-  }
+  //   navigate(); //does the navigation things.
+  
+  //   delay(BNO055_SAMPLERATE_DELAY_MS);
+  // }
 
-  else{
+  // else{
     
-    if (pos.gameByte){
-      XBEE_valid = true;
-      Serial.println("Valid Signal");
-      updateIMU();
-      targetHeading = pos.yaw;
+  //   if (pos.gameByte){
+  //     XBEE_valid = true;
+  //     Serial.println("Valid Signal");
+  //     updateIMU();
+  //     targetHeading = pos.yaw;
 
-    }
+  //   }
     
-  }
+  // }
+
+
+
   // Serial.println(pos.currentState);
 
 }

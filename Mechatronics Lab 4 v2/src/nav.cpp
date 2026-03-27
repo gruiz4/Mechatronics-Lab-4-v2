@@ -17,7 +17,9 @@ float targetTagTurn = 0;
 float targetTagError = 0;
 
 const int CONFIRM_THRESHOLD = 5;
-const int MIN_BLOCK_WIDTH = 15;
+const int MAX_CONFIRM_COUNT = 10;
+
+const int MIN_BLOCK_WIDTH = 20;
 int lastSignature = -1;
 int confirmCount = 0;
 
@@ -34,11 +36,11 @@ float prevErrorIMU = 0.0;
 unsigned long lastTimePID = 0;
 
 // Constants
-float kP_IR = 2.0;  
-float kI_IR = 0.1;  
-float kD_IR = 1.5;  
+float kP_IR = 0;  
+float kI_IR = 0;  
+float kD_IR = 0;  
 
-float kP_IMU = 6.0; 
+float kP_IMU = 5.0; 
 float kI_IMU = 0.05;
 float kD_IMU = 0.5;
 
@@ -46,7 +48,14 @@ float kD_IMU = 0.5;
 float kP_pixy = 0.5; //Used in Approach_tag state. ONLY proportional.
 
 
-float kP_Turn = 3.0; //Proportional variable for P-control in turning
+float kP_Turn = 2.0; //Proportional variable for P-control in turning
+
+
+float target_turn_deg = 0.0;
+long target_turn_counts = 0;
+long start_turn_L = 0;
+long start_turn_R = 0;
+bool turn_initialized = false;
 
 // Helper function to calculate heading error with 360-degree wrapping
 float getHeadingError() {
@@ -89,7 +98,7 @@ void navigate() {
 
         bool isTooCloseToWall = (pos.D_L < MIN_TURN_CLEARANCE || pos.D_R < MIN_TURN_CLEARANCE);
         bool isSafeToTurn = !isTooCloseToWall;
-
+        
         pixy.ccc.getBlocks();
         Serial.println("Check pixy");
         if (pixy.ccc.numBlocks > 0) {
@@ -102,17 +111,18 @@ void navigate() {
                 Serial.println("tag passes min size");
                 
                 if (sig == lastSignature) {
+                    
+                    
                     confirmCount++;
-                } 
-                
+                }
                 else {
                     // Only reset if it's completely wrong, to allow for minor frame drops
-                    if (confirmCount > 0) {
-                        confirmCount--; // Degrade gracefully instead of snapping to 0
-                    } else {
-                        lastSignature = sig;
-                        confirmCount = 1;
-                    }
+                    // if (confirmCount > 0) {
+                    //     confirmCount--; // Degrade gracefully instead of snapping to 0
+                    // } else {
+                    lastSignature = sig;
+                    confirmCount = 1;
+                    // }
                 }
                 if (confirmCount >= CONFIRM_THRESHOLD) {
                     if (pos.D > 2.0 && pos.D <= 10) { 
@@ -120,9 +130,9 @@ void navigate() {
                             tagConfirmedThisFrame = true;
                             
                             // SET ABSOLUTE HEADING BEFORE EXECUTING TURN
-                            if (sig == 1) updateTargetHeading(-90.0);
+                            if (sig == 1) updateTargetHeading(90.0);
                             if (sig == 2) updateTargetHeading(180.0);
-                            if (sig == 3) updateTargetHeading(90.0); 
+                            if (sig == 3) updateTargetHeading(-90.0); 
                             
                             pos.currentState = TURN_TAG;
                             confirmCount = 0;
@@ -153,17 +163,18 @@ void navigate() {
             bool offHeading = (abs(hErr) > 6.0); 
 
             // Priority 1: Front Wall Avoidance
-            if (pos.D < (S / 3)) {
-                Serial.println("Wall avoidance");
+            // Priority 1: Front Wall Avoidance Example
+            if (pos.D > 0.0 && pos.D < (S / 3)) {
+                turn_initialized = false; // Reset the turn tracker
+                
                 if (pos.D_L < pos.D_R) {
-                    updateTargetHeading(-90.0); // Turn Right
+                    target_turn_deg = 90.0; // Positive for Right
                     pos.currentState = PIVOT_RIGHT_DIST;
-                    
                 } else {
-                    updateTargetHeading(90.0);  // Turn Left
+                    target_turn_deg = -90.0; // Negative for Left
                     pos.currentState = PIVOT_LEFT_DIST;
                 }
-            } 
+            }
             // Priority 2: Centering & Heading Correction
             else if (pos.D_L + pos.D_R <= WALL_DIST_TOO_BIG && (offCenter || offHeading) && millis() > ignoreCorrectionsUntil) {
                 pos.currentState = CENTERING;
@@ -193,36 +204,53 @@ void navigate() {
     switch (pos.currentState) {
         
         // Combine all absolute turns into one robust IMU tracking block
-        case TURN_TAG:
-        case PIVOT_LEFT_DIST:
+        case TURN_TAG:;
+        case PIVOT_LEFT_DIST:;
+
         case PIVOT_RIGHT_DIST:
             {
-                Serial.println("Pivor Right Dist");
-                float hErr = getHeadingError();
-                
-                // If we are within 3 degrees of the target, the turn is complete
-                if (abs(hErr) <= 3.0) {
-                    motors.setSpeeds(0, 0);
-                    ignoreCorrectionsUntil = millis() + 500; 
-                    pos.currentState = SEARCHING; // Drop into searching to naturally drive straight
-                    break;
-                }
+                // PHASE 1: Initialize the turn once
+                if (!turn_initialized) {
+                    noInterrupts();
+                    start_turn_L = count_L;
+                    start_turn_R = count_R;
+                    interrupts();
 
-                // P-Controller for smooth turning
-                
-                int minTurnSpeed = 65; // Minimum PWM to overcome motor friction
-                
-                int turnSpeed = abs(hErr) * kP_Turn;
-                turnSpeed = constrain(turnSpeed, minTurnSpeed, TURN_SPEED);
+                    float wheel_distance_to_travel = (abs(target_turn_deg) / 360.0) * robot_turn_circumference;
+                    target_turn_counts = (wheel_distance_to_travel / wheel_circumference) * COUNTS_PER_WHEEL_REV;
 
-                // Assuming positive hErr means target is to the Left (Counter-Clockwise)
-                // If this spins the wrong way, swap the positive and negative signs below.
-                if (hErr > 0) {
-                    motors.setM1Speed(-turnSpeed); 
-                    motors.setM2Speed(turnSpeed);
-                } else {
-                    motors.setM1Speed(turnSpeed);
-                    motors.setM2Speed(-turnSpeed);
+                    if (target_turn_deg > 0) {
+                        motors.setM1Speed(TURN_SPEED);   
+                        motors.setM2Speed(-TURN_SPEED);  
+                    } else {
+                        motors.setM1Speed(-TURN_SPEED);  
+                        motors.setM2Speed(TURN_SPEED);   
+                    }
+                    
+                    turn_initialized = true;
+                } 
+                // PHASE 2: Check progress on subsequent loops
+                else {
+                    long current_L, current_R;
+                    noInterrupts();
+                    current_L = count_L;
+                    current_R = count_R;
+                    interrupts();
+
+                    long diff_L = abs(current_L - start_turn_L);
+                    long diff_R = abs(current_R - start_turn_R);
+
+                    // Turn complete
+                    if (diff_L >= target_turn_counts || diff_R >= target_turn_counts) {
+                        motors.setSpeeds(0, 0);
+                        turn_initialized = false; // Reset for the next time we need to turn
+                        
+                        // Ignore standard corrections briefly so it doesn't violently snap back
+                        ignoreCorrectionsUntil = millis() + 10; 
+                        
+                        // Drop into searching; next loop will automatically handle centering/driving straight
+                        pos.currentState = SEARCHING; 
+                    }
                 }
             }
             break;
@@ -294,6 +322,9 @@ void navigate() {
 
                 // 1. IR (Lateral) PID Math
                 integralIR += errorIR * dt;
+
+                integralIR = constrain(integralIR, -20.0, 20.0); // Cap so if its stuck it doesn't blow shit up
+
                 float derivativeIR = (errorIR - prevErrorIR) / dt;
                 prevErrorIR = errorIR;
                 
@@ -301,6 +332,8 @@ void navigate() {
 
                 // 2. IMU (Heading) PID Math
                 integralIMU += errorIMU * dt;
+                integralIMU = constrain(integralIMU, -20.0, 20.0);
+
                 float derivativeIMU = (errorIMU - prevErrorIMU) / dt;
                 prevErrorIMU = errorIMU;
 
@@ -311,8 +344,8 @@ void navigate() {
                 int centerBaseSpeed = BASE_SPEED * 5 / 4;
                 
                 // Add IR to push to center, Subtract IMU to resist twisting
-                int leftSpeed = constrain(centerBaseSpeed + pidIR - pidIMU, 50, 255);
-                int rightSpeed = constrain(centerBaseSpeed - pidIR + pidIMU, 50, 255);
+                int leftSpeed = constrain(centerBaseSpeed + pidIR - pidIMU, 50, BASE_SPEED);
+                int rightSpeed = constrain(centerBaseSpeed - pidIR + pidIMU, 50, BASE_SPEED);
                 
                 motors.setM1Speed(leftSpeed);
                 motors.setM2Speed(rightSpeed);
@@ -322,8 +355,8 @@ void navigate() {
         case APPROACH_TAG:
             {
                 Serial.println("Approach TagG      ");
-                int leftSpeed = constrain(BASE_SPEED + (targetTagError * kP_pixy), 50, 255);
-                int rightSpeed = constrain(BASE_SPEED - (targetTagError * kP_pixy), 50, 255);
+                int leftSpeed = constrain(BASE_SPEED + (targetTagError * kP_pixy), 50, BASE_SPEED);
+                int rightSpeed = constrain(BASE_SPEED - (targetTagError * kP_pixy), 50, BASE_SPEED);
                 motors.setM1Speed(leftSpeed);
                 motors.setM2Speed(rightSpeed);
                 

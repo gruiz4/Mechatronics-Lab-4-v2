@@ -17,10 +17,10 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
 // ---------------------------------------------------------
 const int encoderA_L = 2;
 const int encoderB_L = 3;
-const int encoderA_R = 19;  
-const int encoderB_R = 18;
+const int encoderA_R = 18;  
+const int encoderB_R = 19;
 
-// Xbee goes to UART2 bus (Serial 2), RX on 17, TX on 16.
+// Xbee goes to UART2 bus (Serial 2), RX on 17, TX on 16. (RX = XBEE DOUT)
 // Encoder Counts
 volatile long count_R = 0;
 volatile long count_L = 0;
@@ -39,7 +39,8 @@ float wheel_circumference = 2.0 * PI_VAL * RADIUS;
 const float S = 20.0;     // Grid square side length (cm)
 const float C = 2.0;      // Off-center threshold (cm)
 const int BASE_SPEED = 90;
-const int TURN_SPEED = 80;
+const int TURN_SPEED = 40;
+
 
 // Safety Constants
 const float MIN_TURN_CLEARANCE = 0;   // Minimum cm needed on the side to safely pivot
@@ -228,7 +229,7 @@ void turn_deg(float deg) {
     motors.setM1Speed(-TURN_SPEED);  
     motors.setM2Speed(TURN_SPEED);   
   }
-
+  
   while (true) {
     long current_L, current_R;
     noInterrupts();
