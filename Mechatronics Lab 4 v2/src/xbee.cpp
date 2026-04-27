@@ -321,7 +321,13 @@ bool fetchXBeePosition(int &outX, int &outY, int &gameByte) {
     hzCounter = 0;
     lastHzTime = now;
   }
+  if(Serial2.available()){
+    Serial.println("Serial2 available");
 
+  }
+  else{
+    Serial.println("Serial not seen");
+  }
   while (Serial2.available()) {
     char c = Serial2.read();
     lastRxTime = millis();
@@ -363,8 +369,9 @@ bool fetchXBeePosition(int &outX, int &outY, int &gameByte) {
     outX = xPos;
     outY = yPos;
     gameByte = matchByte;
-
-    Serial.println(outX);
+    Serial.print("X Pos:");
+    Serial.print(outX);
+    Serial.print(" Y Pos:");
     Serial.println(outY);
   }
 

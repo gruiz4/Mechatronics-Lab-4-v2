@@ -47,13 +47,15 @@ void setup(void) {
 
 void loop(void) {
 
-  updateIMU(); 
+  // updateIMU(); 
+  
+  // Serial.println(pos.xbeeX);
   fetchXBeePosition(pos.xbeeX, pos.xbeeY, pos.gameByte);
   // updateSensors();//Should be updating pos struct
   
   // navigate(); //does the navigation things.
   
-
+  
   //Debug
 
   // Serial.print("Roll:");
@@ -66,39 +68,39 @@ void loop(void) {
   // smartDelay(500);
   
 
-  Serial.println(pos.currentState);
+  // Serial.println(pos.currentState);
 
-  if (pos.gameByte){
-    XBEE_valid = true;
-    last_XBEE_game_signal = millis();
-  }
-  else{
-    if (last_XBEE_game_signal - millis() > game_signal_hyst){
-    XBEE_valid = false;
-    motors.setSpeeds(0,0);
-    }
-  }
+  // if (pos.gameByte){
+  //   XBEE_valid = true;
+  //   last_XBEE_game_signal = millis();
+  // }
+  // else{
+  //   if (last_XBEE_game_signal - millis() > game_signal_hyst){
+  //   XBEE_valid = false;
+  //   motors.setSpeeds(0,0);
+  //   }
+  // }
 
 
-  if (XBEE_valid){
-    updateSensors();//Should be updating pos struct
+  // if (XBEE_valid){
+  //   updateSensors();//Should be updating pos struct
   
-    navigate(); //does the navigation things.
+  //   navigate(); //does the navigation things.
   
-    delay(BNO055_SAMPLERATE_DELAY_MS);
-  }
+  //   delay(BNO055_SAMPLERATE_DELAY_MS);
+  // }
 
-  else{
+  // else{
     
-    if (pos.gameByte){
-      XBEE_valid = true;
-      Serial.println("Valid Signal");
-      updateIMU();
-      targetHeading = pos.yaw;
+  //   if (pos.gameByte){
+  //     XBEE_valid = true;
+  //     Serial.println("Valid Signal");
+  //     updateIMU();
+  //     targetHeading = pos.yaw;
 
-    }
+  //   }
     
-  }
+  // }
 
 
 

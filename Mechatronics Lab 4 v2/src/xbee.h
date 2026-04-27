@@ -20,7 +20,7 @@
 // Set your robot ID here (the letter assigned to this bot's XBee module)
 // In broadcast mode this must match the letter the coordinator assigns
 // (chr(61 + tag_id) in zigbee.py, so tag_id 4 → 'A', 5 → 'B', etc.)
-#define ROBOT_ID  'K'
+#define ROBOT_ID  'V'
 
 // --- FILTER FLAG (broadcast mode only) ---
 // Define FILTER_MY_ROBOT to only process messages containing ROBOT_ID.
@@ -36,6 +36,7 @@
 
 #ifdef BROADCAST_FORMAT
 #define MAX_ROBOTS 15
+#define DEBUG
 
 // Store all robots from the broadcast message
 struct RobotEntry {
